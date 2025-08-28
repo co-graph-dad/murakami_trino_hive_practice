@@ -1,0 +1,1 @@
+# murakami_trino_hive_practice
