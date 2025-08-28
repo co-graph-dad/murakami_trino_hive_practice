@@ -32,9 +32,7 @@ MinIO上でデータを管理し、Hive Metastoreでテーブルメタデータ�
 ## アクセス情報
 - **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
 - **Trino Web UI**: http://localhost:8080
-- **HiveServer2 Web UI**: http://localhost:10002
 - **Hive Metastore**: thrift://localhost:9083
-- **HiveServer2**: jdbc:hive2://localhost:10000
 
 ## ファイル構成
 
