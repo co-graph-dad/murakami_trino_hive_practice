@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <!-- Hadoop が利用するデフォルトのファイルシステムを指定。
+       今回は MinIO を S3A 経由で利用し、"s3a://warehouse" を基準パスとする -->
+  <property>
+    <name>fs.defaultFS</name>
+    <value>s3a://warehouse</value>
+  </property>
+  
+  <!-- MinIO を Hadoop から S3A として扱うための設定 -->
+
+  <!-- S3A 実装クラスを明示的に指定 -->
+  <property>
+    <name>fs.s3a.impl</name>
+    <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+  </property>
+
+  <!-- MinIO サービスのエンドポイント URL を指定 -->
+  <property>
+    <name>fs.s3a.endpoint</name>
+    <value>http://minio:9000</value>
+  </property>
+
+  <!-- MinIO に接続するためのアクセスキー -->
+  <property>
+    <name>fs.s3a.access.key</name>
+    <value>minioadmin</value>
+  </property>
+
+  <!-- MinIO に接続するためのシークレットキー -->
+  <property>
+    <name>fs.s3a.secret.key</name>
+    <value>minioadmin</value>
+  </property>
+
+  <!-- バケット名をホスト名として使わず、パス形式でアクセスする（MinIO 互換用） -->
+  <property>
+    <name>fs.s3a.path.style.access</name>
+    <value>true</value>
+  </property>
+
+  <!-- HTTPS ではなく HTTP で通信するために SSL を無効化 -->
+  <property>
+    <name>fs.s3a.connection.ssl.enabled</name>
+    <value>false</value>
+  </property>
+</configuration>

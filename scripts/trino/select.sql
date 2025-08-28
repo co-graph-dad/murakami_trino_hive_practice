@@ -1,0 +1,1 @@
+SELECT * FROM hive.default.orders_external LIMIT 5;

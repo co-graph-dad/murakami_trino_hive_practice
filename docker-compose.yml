@@ -1,0 +1,117 @@
+services:
+  # S3互換ストレージとして利用する MinIO
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"   # APIアクセス用
+      - "9001:9001"   # 管理コンソール用
+    environment:
+      - MINIO_ROOT_USER=minioadmin         # MinIOの管理ユーザー
+      - MINIO_ROOT_PASSWORD=minioadmin     # MinIOの管理パスワード
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data                   # データを永続化
+    healthcheck:                           # 起動確認を自動化
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Hive Metastore が利用する PostgreSQL
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=metastore              # メタ情報保存用DB
+      - POSTGRES_USER=hive
+      - POSTGRES_PASSWORD=hive
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:                           # DBが起動済みか確認
+      test: ["CMD-SHELL", "pg_isready -U hive -d metastore"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Hive Metastore サービス本体
+  hive-metastore:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: hive-metastore
+    container_name: hive-metastore
+    ports:
+      - "9083:9083"                        # Thrift サービスを公開（TrinoやHiveから利用）
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx1g -Djava.security.egd=file:/dev/./urandom -Djava.net.preferIPv4Stack=true
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    command: >                             # 起動手順（依存サービスを待機 → 初期化 → 起動）
+      bash -lc "
+        set -e
+        echo 'Waiting for PostgreSQL...'
+        until nc -z -w2 postgres 5432; do
+          echo 'Waiting for postgres...'
+          sleep 2
+        done
+        echo 'PostgreSQL is ready'
+
+        echo 'Waiting for MinIO...'
+        until curl -sSfI --connect-timeout 2 --max-time 3 http://minio:9000/minio/health/live >/dev/null; do
+          echo 'Waiting for minio...'
+          sleep 2
+        done
+        echo 'MinIO is ready'
+
+        # （任意）初回のみ：warehouse バケット/ディレクトリ確保
+        hadoop fs -mkdir -p s3a://warehouse/ || true
+
+        echo 'Initializing Hive Metastore schema...'
+        /opt/hive/bin/schematool -dbType postgres -initSchema || echo 'Schema already exists or initialization failed'
+
+        echo 'Starting Hive Metastore...'
+        /opt/hive/bin/hive --service metastore
+      "
+    depends_on:                            # PostgreSQLとMinIOが先に立ち上がることを保証
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:                               # 設定ファイルをホストから読み込む
+      - ./hive_metastore/hive-site.xml:/opt/hive/conf/hive-site.xml:ro
+      - ./hive_metastore/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./hive_metastore/metastore-site.xml:/opt/hive/conf/metastore-site.xml:ro
+      - ./hive_metastore/hadoop-env.sh:/opt/hadoop/etc/hadoop/hadoop-env.sh:ro
+
+
+  # Trino（分散SQLエンジン）
+  trino:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: trino
+    container_name: trino
+    ports:
+      - "8080:8080"      # Trino クエリ用の HTTP API
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx2g
+      - AWS_ACCESS_KEY_ID=minioadmin       # MinIO 認証情報（Trino が直接 S3 にアクセスする場合）
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=us-east-1
+      - S3_ENDPOINT=http://minio:9000
+      - S3_PATH_STYLE_ACCESS=true
+      # Hadoop S3A設定を Trino コンテナに流し込む場合の環境変数
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
+      - FS_S3A_ENDPOINT=http://minio:9000
+      - FS_S3A_ACCESS_KEY=minioadmin
+      - FS_S3A_SECRET_KEY=minioadmin
+      - FS_S3A_PATH_STYLE_ACCESS=true
+      - FS_S3A_CONNECTION_SSL_ENABLED=false
+    volumes:            # Trino の設定ファイルをホストから読み込む
+      - ./trino/config.properties:/etc/trino/config.properties:ro
+      - ./trino/hive.properties:/etc/trino/catalog/hive.properties:ro
+
+volumes:
+  minio-data:           # MinIO データ用の永続ボリューム
+  postgres-data:        # PostgreSQL データ用の永続ボリューム

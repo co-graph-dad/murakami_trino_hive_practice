@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <!-- Hive Metastore が利用するデータベースの接続情報
+       → PostgreSQL にメタ情報（テーブル定義・パーティション情報など）を保存する -->
+  <property>
+    <name>javax.jdo.option.ConnectionURL</name>
+    <value>jdbc:postgresql://postgres:5432/metastore</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionDriverName</name>
+    <value>org.postgresql.Driver</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionUserName</name>
+    <value>hive</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionPassword</name>
+    <value>hive</value>
+  </property>
+
+  <!-- Hive Metastore サービスを Thrift 経由で外部に公開するアドレスとポート
+       → 他のクライアント（Trino や Hive CLI）がメタ情報を問い合わせできるようにする -->
+  <property>
+    <name>hive.metastore.uris</name>
+    <value>thrift://0.0.0.0:9083</value>
+  </property>
+
+  <!-- デフォルトのテーブル格納場所（warehouseディレクトリ）
+       → MinIO(S3互換ストレージ) 上の s3a://warehouse/ を利用する -->
+  <property>
+    <name>hive.metastore.warehouse.dir</name>
+    <value>s3a://warehouse/</value>
+  </property>
+
+  <!-- Hadoop に MinIO を S3A として扱わせるための接続設定 -->
+
+  <!-- S3A ファイルシステムの実装クラスを指定 -->
+  <property>
+    <name>fs.s3a.impl</name>
+    <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+  </property>
+
+  <!-- MinIO のエンドポイント URL -->
+  <property>
+    <name>fs.s3a.endpoint</name>
+    <value>http://minio:9000</value>
+  </property>
+
+  <!-- MinIO では AWS 形式の仮想ホスト方式ではなくパス方式でアクセスするため有効化 -->
+  <property>
+    <name>fs.s3a.path.style.access</name>
+    <value>true</value>
+  </property>
+
+  <!-- MinIO へのアクセスキー（認証用） -->
+  <property>
+    <name>fs.s3a.access.key</name>
+    <value>minioadmin</value>
+  </property>
+
+  <!-- MinIO へのシークレットキー（認証用） -->
+  <property>
+    <name>fs.s3a.secret.key</name>
+    <value>minioadmin</value>
+  </property>
+
+  <!-- MinIO を HTTP で動かしているため、SSL を無効化 -->
+  <property>
+    <name>fs.s3a.connection.ssl.enabled</name>
+    <value>false</value>
+  </property>
+</configuration>
